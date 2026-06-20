@@ -11,7 +11,7 @@
  *
  * 라우트:
  *   GET /api/registry?pnu=...   → { building, recent_trades }
- *   그 외 경로                   → public/ 정적 파일 (HTML은 키 주입 후 서빙)
+ *   그 외 경로                   → public/ 정적 파일 (HTML은 키 주입 후 서빙)s
  */
 
 const DATAGO = "http://apis.data.go.kr/1613000";
@@ -67,7 +67,7 @@ async function buildingInfo(parts, env) {
     sigunguCd: parts.sigungu_cd, bjdongCd: parts.bjdong_cd,
     platGbCd: parts.plat_gb_cd, bun: parts.bun, ji: parts.ji,
     numOfRows: "10", pageNo: "1", _type: "json",
-  });
+  }); 
   const r = await fetch(`${DATAGO}/BldRgstService_v2/getBrTitleInfo?${q}`);
   const items = pickItems(await r.json().catch(() => null));
   if (!items.length) return {};
