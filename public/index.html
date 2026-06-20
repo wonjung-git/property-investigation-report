@@ -373,7 +373,7 @@ function jsonp(url, timeout=12000){
 }
 
 const VW = "https://api.vworld.kr/req";
-const KEY = () => CFG.VWORLD_KEY;
+const KEY = () => (CFG.VWORLD_KEY || "").trim();
 
 async function vGeocode(address, type){
   const q = new URLSearchParams({ service:"address", request:"getCoord", version:"2.0",
