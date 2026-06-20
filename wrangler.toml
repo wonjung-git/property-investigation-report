@@ -3,10 +3,7 @@ main = "worker.js"
 compatibility_date = "2026-06-20"
 compatibility_flags = ["nodejs_compat"]
 
-# 정적 파일(index.html)은 public/ 안에 두고, 워커가 ASSETS로 서빙합니다.
 [assets]
 directory = "./public"
 binding = "ASSETS"
 run_worker_first = true
-directory = "./public"
-binding = "ASSETS"
