@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>물건조사서 자동 생성</title>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" />
+<link rel="stylesheet" as="style" crossorigin
+  href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+<style>
+  /* ───────── 토큰 ───────── */
+  :root{
+    --paper:#EEF1F6;        /* 작업대 배경 (지적도 느낌의 쿨톤) */
+    --sheet:#FFFFFF;        /* 조사서 용지 */
+    --ink:#16233A;          /* 본문 잉크 */
+    --ink-soft:#5A6880;     /* 보조 텍스트 */
+    --ink-faint:#8C97AC;
+    --line:#DBE1EA;         /* 헤어라인 */
+    --line-strong:#C3CCDA;
+    --accent:#2D5BA8;       /* 지적 블루 */
+    --accent-deep:#173764;
+    --fill:#F2F5FA;         /* 항목칸 배경 */
+    --stamp:#C0402F;        /* 도장/핀 — 아주 드물게만 */
+    --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+    --sans:"Pretendard Variable",Pretendard,-apple-system,system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    font-family:var(--sans);
+    background:var(--paper);
+    color:var(--ink);
+    -webkit-font-smoothing:antialiased;
+    font-feature-settings:"tnum" 1,"ss01" 1;
+  }
+
+  /* ───────── 상단 작업 바 ───────── */
+  .bar{
+    position:sticky;top:0;z-index:20;
+    background:rgba(255,255,255,.86);
+    backdrop-filter:saturate(140%) blur(8px);
+    border-bottom:1px solid var(--line);
+  }
+  .bar-inner{
+    max-width:880px;margin:0 auto;padding:14px 20px;
+    display:flex;gap:12px;align-items:center;flex-wrap:wrap;
+  }
+  .brand{display:flex;align-items:baseline;gap:9px;margin-right:auto}
+  .brand b{font-size:16px;font-weight:800;letter-spacing:-.01em}
+  .brand span{font:600 10px/1 var(--mono);letter-spacing:.18em;color:var(--accent);text-transform:uppercase}
+  .field{display:flex;gap:8px;align-items:center;flex:1;min-width:260px}
+  .field input{
+    flex:1;height:40px;padding:0 14px;
+    border:1px solid var(--line-strong);border-radius:9px;
+    font-family:var(--sans);font-size:14px;color:var(--ink);background:#fff;
+  }
+  .field input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(45,91,168,.14)}
+  .btn{
+    height:40px;padding:0 18px;border:0;border-radius:9px;cursor:pointer;
+    font-family:var(--sans);font-size:14px;font-weight:700;color:#fff;
+    background:var(--accent);transition:background .15s;
+  }
+  .btn:hover{background:var(--accent-deep)}
+  .btn.ghost{background:transparent;color:var(--accent);border:1px solid var(--line-strong)}
+  .btn.ghost:hover{background:var(--fill)}
+  .btn:disabled{opacity:.55;cursor:wait}
+
+  /* ───────── 용지 ───────── */
+  .stage{max-width:880px;margin:0 auto;padding:28px 20px 80px}
+  .sheet{
+    background:var(--sheet);border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 1px 0 rgba(22,35,58,.03),0 18px 40px -28px rgba(22,35,58,.45);
+    overflow:hidden;
+  }
+
+  /* 머리띠 — 공문서 느낌의 등록 정보 스트립 */
+  .head{
+    padding:26px 30px 20px;border-bottom:2px solid var(--accent-deep);
+    background:
+      linear-gradient(180deg,#fff, #fff),
+      repeating-linear-gradient(90deg,transparent 0 7px,rgba(45,91,168,.05) 7px 8px);
+    position:relative;
+  }
+  .eyebrow{font:600 10px/1 var(--mono);letter-spacing:.26em;color:var(--accent);text-transform:uppercase}
+  .head h1{margin:8px 0 0;font-size:30px;font-weight:800;letter-spacing:.14em}
+  .reg{
+    margin-top:16px;display:flex;gap:26px;flex-wrap:wrap;
+    font-family:var(--mono);font-size:11.5px;color:var(--ink-soft);
+  }
+  .reg b{display:block;font:600 9px/1.6 var(--mono);letter-spacing:.16em;color:var(--ink-faint);text-transform:uppercase}
+  .reg span{color:var(--ink);font-size:13px}
+  .seal{
+    position:absolute;top:24px;right:28px;width:62px;height:62px;border-radius:50%;
+    border:2px solid var(--stamp);color:var(--stamp);
+    display:grid;place-items:center;transform:rotate(-12deg);
+    font:800 13px/1.1 var(--sans);letter-spacing:.12em;text-align:center;
+    opacity:.85;
+  }
+
+  .body{padding:8px 30px 30px}
+
+  /* 섹션 */
+  section{margin-top:24px}
+  .sec-h{
+    display:flex;align-items:center;gap:10px;margin:0 0 10px;
+    padding-bottom:7px;border-bottom:1px solid var(--line);
+  }
+  .sec-no{font:700 11px/1 var(--mono);color:#fff;background:var(--accent);
+    padding:4px 6px;border-radius:5px;letter-spacing:.05em}
+  .sec-h h2{margin:0;font-size:14px;font-weight:700;letter-spacing:.01em}
+  .sec-h em{font-style:normal;margin-left:auto;font:500 11px/1 var(--mono);color:var(--ink-faint);letter-spacing:.04em}
+
+  /* 라벨/값 그리드 */
+  .kv{display:grid;grid-template-columns:130px 1fr;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+  .kv>div{padding:10px 14px;border-top:1px solid var(--line);font-size:13.5px;display:flex;align-items:center}
+  .kv>div:nth-child(-n+2){border-top:0}
+  .kv .k{background:var(--fill);color:var(--ink-soft);font-weight:600;font-size:12.5px}
+  .kv .v{color:var(--ink)}
+  .kv .v.num{font-family:var(--mono);font-size:13px;letter-spacing:.01em}
+  .kv .v.empty{color:var(--ink-faint)}
+  .tag{display:inline-block;margin:2px 5px 2px 0;padding:2px 8px;border-radius:999px;
+    background:rgba(45,91,168,.1);color:var(--accent-deep);font-size:11.5px;font-weight:600}
+
+  /* 지도 + 기본정보 2열 */
+  .top-grid{display:grid;grid-template-columns:1.15fr .85fr;gap:18px}
+  @media(max-width:680px){.top-grid{grid-template-columns:1fr}}
+  .map-frame{
+    border:1px solid var(--line-strong);border-radius:10px;overflow:hidden;
+    background:var(--fill);position:relative;aspect-ratio:4/3;
+  }
+  .map-frame img{width:100%;height:100%;object-fit:cover;display:block}
+  .map-frame figcaption{
+    position:absolute;left:0;bottom:0;right:0;padding:6px 10px;
+    font:500 10.5px/1 var(--mono);letter-spacing:.04em;color:#fff;
+    background:linear-gradient(180deg,transparent,rgba(22,35,58,.72));
+  }
+  /* 지도 폴백 (지적도 스타일 플레이스홀더) */
+  .map-fallback{position:absolute;inset:0;display:grid;place-items:center;
+    background:
+      repeating-linear-gradient(0deg,transparent 0 23px,rgba(45,91,168,.08) 23px 24px),
+      repeating-linear-gradient(90deg,transparent 0 23px,rgba(45,91,168,.08) 23px 24px),
+      var(--fill);
+    text-align:center;color:var(--ink-faint)}
+  .map-fallback .pin{width:14px;height:14px;border-radius:50% 50% 50% 0;background:var(--stamp);
+    transform:rotate(-45deg);box-shadow:0 2px 6px rgba(192,64,47,.5);margin-bottom:10px}
+  .map-fallback small{font:500 11px/1.5 var(--mono);display:block;max-width:80%}
+
+  /* 실거래 테이블 */
+  table.trades{width:100%;border-collapse:collapse;font-size:13px}
+  table.trades th,table.trades td{padding:9px 10px;border-bottom:1px solid var(--line);text-align:left}
+  table.trades thead th{background:var(--fill);color:var(--ink-soft);font-weight:600;font-size:12px;
+    border-bottom:1px solid var(--line-strong)}
+  table.trades td.num{font-family:var(--mono);text-align:right}
+  table.trades td.c{text-align:center;font-family:var(--mono)}
+  table.trades tr:last-child td{border-bottom:0}
+  .price{font-weight:700;color:var(--accent-deep)}
+
+  .note{margin-top:10px;padding:12px 14px;border-left:3px solid var(--accent);
+    background:var(--fill);border-radius:0 8px 8px 0;font-size:12.5px;color:var(--ink-soft);line-height:1.6}
+
+  .foot{margin-top:26px;padding-top:14px;border-top:1px solid var(--line);
+    font-size:11px;color:var(--ink-faint);line-height:1.7}
+
+  .empty-state{padding:60px 20px;text-align:center;color:var(--ink-faint)}
+  .empty-state .pin{width:18px;height:18px;border-radius:50% 50% 50% 0;background:var(--accent);
+    transform:rotate(-45deg);margin:0 auto 16px}
+  .err{margin:0 0 14px;padding:11px 14px;border-radius:9px;background:#FBEBE8;color:#9A2A1B;
+    font-size:13px;border:1px solid #F1C9C2;display:none}
+
+  .actions{display:flex;gap:8px;justify-content:flex-end;margin-top:18px}
+
+  /* 인쇄 */
+  @media print{
+    .bar,.actions{display:none!important}
+    body{background:#fff}
+    .stage{padding:0;max-width:none}
+    .sheet{border:0;box-shadow:none;border-radius:0}
+  }
+</style>
+</head>
+<body>
+  <!-- ====== CONFIG ======
+       배포 시 PROXY_BASE를 Worker 주소로 설정하세요.
+       같은 도메인에 Worker를 라우팅했다면 "" (빈 문자열) 그대로 두면 됩니다. -->
+  <script>
+    window.APP_CONFIG = {
+      // 공공데이터포털(건축물대장·실거래가) 프록시. "" = 같은 도메인의 /api/*.
+      PROXY_BASE: "",
+      // V-World 키는 브라우저에서 직접 호출합니다.
+      // 배포 시 워커가 {{VWORLD_KEY}} 자리에 실제 키를 주입합니다(레포엔 키가 없음).
+      VWORLD_KEY: "{{VWORLD_KEY}}",
+    };
+  </script>
+
+  <header class="bar">
+    <div class="bar-inner">
+      <div class="brand"><b>물건조사서</b><span>auto survey</span></div>
+      <div class="field">
+        <input id="addr" type="text" placeholder="주소 입력 — 예) 서울특별시 광진구 자양동 680"
+               autocomplete="off" />
+        <button id="go" class="btn">조사서 생성</button>
+        <button id="demo" class="btn ghost">데모</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="stage">
+    <div id="errbox" class="err"></div>
+    <article class="sheet" id="sheet">
+      <div class="empty-state" id="empty">
+        <div class="pin"></div>
+        주소를 입력하고 <b>조사서 생성</b>을 누르세요.<br>
+        키 설정 전이라면 <b>데모</b>로 출력 양식을 먼저 확인할 수 있어요.
+      </div>
+      <div id="content" hidden></div>
+    </article>
+
+    <div class="actions" id="actions" hidden>
+      <button class="btn ghost" onclick="window.print()">인쇄 / PDF 저장</button>
+    </div>
+  </main>
+
+<script>
+const CFG = window.APP_CONFIG;
+const $ = (s,el=document)=>el.querySelector(s);
+
+/* ───────── 포맷 헬퍼 ───────── */
+const PYEONG = 3.305785;
+const fmtArea = m2 => m2==null ? null
+  : `${(+m2).toLocaleString(undefined,{maximumFractionDigits:1})} ㎡ (${(m2/PYEONG).toLocaleString(undefined,{maximumFractionDigits:1})}평)`;
+const fmtFloors = (g,u)=>{
+  const p=[]; if(g) p.push(`지상 ${g}층`); if(u) p.push(`지하 ${u}층`);
+  return p.length?p.join(" / "):null;
+};
+const fmtRatio = (bc,far)=> (bc==null&&far==null)?null:`${bc??"-"}% / ${far??"-"}%`;
+const fmtPrice = (won,year)=> won==null?null
+  :`${(+won).toLocaleString()} 원/㎡${year?` (${year} 기준)`:""}`;
+const fmtManwon = v=>{
+  if(v==null) return "-";
+  const eok=Math.floor(v/10000), man=v%10000;
+  if(eok&&man) return `${eok}억 ${man.toLocaleString()}만원`;
+  if(eok) return `${eok}억원`;
+  return `${man.toLocaleString()}만원`;
+};
+const esc = s => String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+/* ───────── 렌더 ───────── */
+function render(d){
+  const hasKey = CFG.VWORLD_KEY && !CFG.VWORLD_KEY.includes("{{");
+  const mapURL = (d.lat!=null && d.lng!=null && hasKey)
+    ? `https://api.vworld.kr/req/image?service=image&request=getmap&format=png`
+      + `&basemap=GRAPHIC&crs=EPSG:4326&center=${d.lng},${d.lat}&zoom=17&size=600,450`
+      + `&marker=${encodeURIComponent(`point:${d.lng} ${d.lat}|label:매물|color:red`)}`
+      + `&key=${encodeURIComponent(CFG.VWORLD_KEY)}`
+    : "";
+  const L=d.land||{}, B=d.building||{}, trades=d.recent_trades||[];
+
+  const kv = rows => `<div class="kv">${rows.map(([k,v,num])=>`
+      <div class="k">${esc(k)}</div>
+      <div class="v${num?" num":""}${(v==null||v==="")?" empty":""}">${v==null||v===""?"-":v}</div>`).join("")}</div>`;
+
+  const tradeRows = trades.length ? trades.map(t=>`
+      <tr>
+        <td class="c">${esc(t.deal_date||"-")}</td>
+        <td>${esc(t.name||"-")}</td>
+        <td class="num">${t.area_m2!=null?(+t.area_m2).toFixed(1)+" ㎡":"-"}</td>
+        <td class="c">${t.floor??"-"}</td>
+        <td class="num price">${fmtManwon(t.price_manwon)}</td>
+      </tr>`).join("")
+    : `<tr><td colspan="5" style="color:var(--ink-faint);text-align:center;padding:18px">조회된 실거래 내역이 없습니다.</td></tr>`;
+
+  $("#content").innerHTML = `
+    <div class="head">
+      <div class="seal">조사<br>완료</div>
+      <div class="eyebrow">Auto Cadastral Survey · 자동 물건조사</div>
+      <h1>물 건 조 사 서</h1>
+      <div class="reg">
+        <div><b>조사일자</b><span>${new Date().toISOString().slice(0,10)}</span></div>
+        <div><b>PNU</b><span>${esc(d.pnu||"—")}</span></div>
+        <div><b>좌표</b><span>${d.lat!=null?`${(+d.lat).toFixed(5)}, ${(+d.lng).toFixed(5)}`:"—"}</span></div>
+      </div>
+    </div>
+
+    <div class="body">
+      <section>
+        <div class="sec-h"><span class="sec-no">01</span><h2>기본 정보 · 위치</h2></div>
+        <div class="top-grid">
+          <figure class="map-frame" style="margin:0">
+            ${mapURL?`<img src="${mapURL}" alt="대상지 지도"
+                onerror="this.style.display='none';this.nextElementSibling.style.display='grid'">`:""}
+            <div class="map-fallback" style="display:${mapURL?"none":"grid"}">
+              <div><div class="pin"></div><small>V-World 정적지도<br>(키 설정 시 실제 지도 표시)</small></div>
+            </div>
+            <figcaption>${esc(d.jibun_address||d.query_address||"")}</figcaption>
+          </figure>
+          ${kv([
+            ["입력 주소", esc(d.query_address)],
+            ["지번 주소", esc(d.jibun_address)],
+            ["도로명 주소", esc(d.road_address)],
+            ["PNU", esc(d.pnu), true],
+          ])}
+        </div>
+      </section>
+
+      <section>
+        <div class="sec-h"><span class="sec-no">02</span><h2>토지</h2><em>V-World</em></div>
+        ${kv([
+          ["지목", esc(L.jimok)],
+          ["토지 면적", fmtArea(L.area_m2), true],
+          ["용도지역", L.use_zone?esc(L.use_zone):null],
+          ["토지이용계획", (L.use_plans&&L.use_plans.length)?L.use_plans.map(p=>`<span class="tag">${esc(p)}</span>`).join(""):null],
+          ["개별공시지가", fmtPrice(L.official_price,L.price_year), true],
+        ])}
+      </section>
+
+      <section>
+        <div class="sec-h"><span class="sec-no">03</span><h2>건축물</h2><em>건축물대장</em></div>
+        ${kv([
+          ["주용도", esc(B.main_use)],
+          ["구조", esc(B.structure)],
+          ["층수", fmtFloors(B.ground_floors,B.underground_floors), true],
+          ["연면적", fmtArea(B.total_area_m2), true],
+          ["건폐율 / 용적률", fmtRatio(B.building_coverage,B.floor_area_ratio), true],
+          ["세대(가구) 수", B.households?`${B.households} 세대`:null, true],
+          ["사용승인일", esc(B.approval_date), true],
+        ])}
+      </section>
+
+      <section>
+        <div class="sec-h"><span class="sec-no">04</span><h2>최근 실거래가</h2><em>참고</em></div>
+        <table class="trades">
+          <thead><tr><th>거래일</th><th>단지/건물</th><th>전용면적</th><th>층</th><th>거래금액</th></tr></thead>
+          <tbody>${tradeRows}</tbody>
+        </table>
+      </section>
+
+      <section>
+        <div class="sec-h"><span class="sec-no">05</span><h2>권리관계 · 현장 메모</h2></div>
+        ${kv([
+          ["권리관계(등기)", esc(d.owner_note||"등기부등본 별도 열람 필요 (오픈API 미제공)")],
+          ["현장 메모", esc(d.field_notes)|| "（현장 확인 후 작성）"],
+        ])}
+        <div class="note">등기 권리관계(소유자·근저당)는 무료 오픈 API가 없어 자동으로 채울 수 없습니다.
+          인터넷등기소에서 등기부등본을 별도 열람해 확인하세요.</div>
+      </section>
+
+      <div class="foot">
+        ※ 본 조사서는 V-World 및 공공데이터포털 오픈 API 자료를 자동 수집해 작성되었습니다.
+        수치는 공부(公簿) 기준이며 현장 상황과 다를 수 있습니다. 최종 확인·설명은 담당 공인중개사의 책임 하에 이루어집니다.
+      </div>
+    </div>`;
+
+  $("#empty").hidden = true;
+  $("#content").hidden = false;
+  $("#actions").hidden = false;
+}
+
+/* ───────── 데이터 취득 ───────── */
+
+// JSONP — V-World는 Cloudflare 엣지에서 차단되므로 브라우저에서 직접 호출.
+function jsonp(url, timeout=12000){
+  return new Promise((resolve, reject)=>{
+    const cb = "__vw_" + Math.random().toString(36).slice(2);
+    const sep = url.includes("?") ? "&" : "?";
+    const script = document.createElement("script");
+    const timer = setTimeout(()=>{ cleanup(); reject(new Error("V-World 응답 시간 초과")); }, timeout);
+    function cleanup(){ clearTimeout(timer); delete window[cb]; script.remove(); }
+    window[cb] = data => { cleanup(); resolve(data); };
+    script.onerror = () => { cleanup(); reject(new Error("V-World 호출 실패")); };
+    script.src = `${url}${sep}callback=${cb}`;
+    document.body.appendChild(script);
+  });
+}
+
+const VW = "https://api.vworld.kr/req";
+const KEY = () => CFG.VWORLD_KEY;
+
+async function vGeocode(address, type){
+  const q = new URLSearchParams({ service:"address", request:"getCoord", version:"2.0",
+    crs:"epsg:4326", address, type, format:"json", key:KEY() });
+  const j = await jsonp(`${VW}/address?${q}`);
+  const resp = j && j.response;
+  if(!resp || resp.status!=="OK") return null;
+  const p = resp.result.point;
+  return { x:+p.x, y:+p.y, matched: resp.refined && resp.refined.text };
+}
+
+async function vFeature(dataId, filter){
+  const q = new URLSearchParams({ service:"data", request:"GetFeature", version:"2.0",
+    data:dataId, key:KEY(), format:"json", geometry:"false", page:"1", size:"5",
+    crs:"EPSG:4326", domain:"browser" });
+  for(const [k,v] of Object.entries(filter)) q.set(k,v);
+  const j = await jsonp(`${VW}/data?${q}`);
+  const resp = j && j.response;
+  if(!resp || resp.status!=="OK") return null;
+  const f = resp.result?.featureCollection?.features?.[0];
+  return f ? f.properties : null;
+}
+
+const numv = v => { const n = parseFloat(v); return Number.isFinite(n) ? n : null; };
+
+async function jget(path){
+  const r = await fetch(`${CFG.PROXY_BASE}${path}`);
+  if(!r.ok) throw new Error(`${path} → ${r.status}`);
+  return r.json();
+}
+
+async function survey(address){
+  const data = { query_address:address, pnu:null, jibun_address:null, road_address:null,
+    lat:null, lng:null, land:{}, building:{}, recent_trades:[],
+    owner_note:"등기부등본 별도 열람 필요 (오픈API 미제공)", field_notes:"" };
+
+  if(!KEY() || KEY().includes("{{")) throw new Error("V-World 키가 설정되지 않았습니다(워커 주입 확인).");
+
+  // 1) 지오코딩 (지번→도로명)
+  const geo = await vGeocode(address,"PARCEL").catch(()=>null)
+           || await vGeocode(address,"ROAD").catch(()=>null);
+  if(!geo) return data;
+  data.lat=geo.y; data.lng=geo.x; data.jibun_address=geo.matched||address;
+
+  // 2) 좌표 → 필지(PNU/지목/면적)
+  const parcel = await vFeature("LP_PA_CBND_BUBUN",{ geomFilter:`POINT(${geo.x} ${geo.y})` }).catch(()=>null);
+  if(!parcel || !parcel.pnu) return data;
+  data.pnu = parcel.pnu;
+  data.land = { jimok: parcel.jimok || parcel.dgm_nm, area_m2: numv(parcel.lndpcl_ar ?? parcel.ar) };
+
+  // 3) 용도지역
+  const zone = await vFeature("LT_C_UQ111",{ attrFilter:`pnu:=:${parcel.pnu}` }).catch(()=>null);
+  if(zone){ const z = zone.uname||zone.dgm_nm||zone.anm; if(z){ data.land.use_zone=z; data.land.use_plans=[z]; } }
+
+  // 4) 건축물대장 + 5) 실거래가 — 워커(공공데이터포털)에 위임
+  try{
+    const reg = await jget(`/api/registry?pnu=${encodeURIComponent(parcel.pnu)}`);
+    if(reg.building) data.building = reg.building;
+    if(reg.recent_trades) data.recent_trades = reg.recent_trades;
+  }catch(e){ /* 공공데이터 실패해도 토지/지도는 표시 */ }
+
+  return data;
+}
+
+function showError(msg){
+  const e=$("#errbox"); e.textContent=msg; e.style.display="block";
+}
+function clearError(){ $("#errbox").style.display="none"; }
+
+async function run(){
+  const address = $("#addr").value.trim();
+  if(!address){ $("#addr").focus(); return; }
+  clearError();
+  const btn=$("#go"); btn.disabled=true; btn.textContent="조사 중…";
+  try{
+    const data = await survey(address);
+    data.query_address = data.query_address || address;
+    render(data);
+  }catch(err){
+    showError(`조회에 실패했습니다: ${err.message}`);
+  }finally{
+    btn.disabled=false; btn.textContent="조사서 생성";
+  }
+}
+
+/* ───────── 데모 ───────── */
+const DEMO = {
+  query_address:"서울특별시 광진구 자양동 680",
+  pnu:"1121510100106800000",
+  jibun_address:"서울특별시 광진구 자양동 680",
+  road_address:"서울특별시 광진구 아차산로 100",
+  lat:37.534567, lng:127.082345,
+  land:{ jimok:"대", area_m2:12450.0, use_zone:"제3종일반주거지역",
+    use_plans:["제3종일반주거지역","지구단위계획구역","대공방어협조구역"],
+    official_price:8120000, price_year:"2025" },
+  building:{ main_use:"공동주택(아파트)", structure:"철근콘크리트구조",
+    ground_floors:25, underground_floors:2, total_area_m2:86420.5,
+    building_coverage:19.8, floor_area_ratio:248.5,
+    approval_date:"2003-11-20", households:540 },
+  recent_trades:[
+    {deal_date:"2026-05-18",price_manwon:138000,area_m2:84.97,floor:14,name:"자양현대3차"},
+    {deal_date:"2026-05-02",price_manwon:121500,area_m2:59.94,floor:7,name:"자양현대3차"},
+    {deal_date:"2026-04-21",price_manwon:142000,area_m2:84.97,floor:21,name:"자양현대3차"},
+    {deal_date:"2026-04-09",price_manwon:119000,area_m2:59.94,floor:3,name:"자양우성7차"},
+    {deal_date:"2026-03-30",price_manwon:156000,area_m2:114.86,floor:11,name:"자양현대3차"},
+  ],
+  field_notes:"역세권(건대입구역 도보 8분), 1층 상가 공실 없음. 단지 내 주차 1.2대/세대.",
+};
+
+$("#go").addEventListener("click", run);
+$("#addr").addEventListener("keydown", e=>{ if(e.key==="Enter") run(); });
+$("#demo").addEventListener("click", ()=>{ clearError(); $("#addr").value=DEMO.query_address; render(structuredClone(DEMO)); });
+</script>
+</body>
+</html>
