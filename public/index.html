@@ -422,7 +422,12 @@ async function survey(address){
   const parcel = await vFeature("LP_PA_CBND_BUBUN",{ geomFilter:`POINT(${geo.x} ${geo.y})` }).catch(()=>null);
   if(!parcel || !parcel.pnu) return data;
   data.pnu = parcel.pnu;
-  data.land = { jimok: parcel.jimok || parcel.dgm_nm, area_m2: numv(parcel.lndpcl_ar ?? parcel.ar) };
+  if(parcel.addr) data.jibun_address = parcel.addr;   // 더 정확한 지번주소
+  // 연속지적도(LP_PA_CBND_BUBUN)에는 공시지가(jiga)가 들어있음. 지목/면적은 없음.
+  data.land = {
+    official_price: numv(parcel.jiga),
+    price_year: parcel.gosi_year || null,
+  };
 
   // 3) 용도지역
   const zone = await vFeature("LT_C_UQ111",{ attrFilter:`pnu:=:${parcel.pnu}` }).catch(()=>null);
